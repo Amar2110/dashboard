@@ -1,0 +1,318 @@
+To implement the CEO Dashboard with Spring Boot using an in-memory database (H2), here's an end-to-end solution for each module.
+
+1. User Authentication and Authorization (with Spring Security and H2)
+
+pom.xml
+
+Include the necessary dependencies in your pom.xml:
+
+<dependencies>
+    <!-- Spring Boot dependencies -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-api</artifactId>
+        <version>0.11.2</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-thymeleaf</artifactId>
+    </dependency>
+</dependencies>
+
+application.properties
+
+# H2 Database configuration
+spring.datasource.url=jdbc:h2:mem:testdb
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=password
+spring.h2.console.enabled=true
+spring.jpa.hibernate.ddl-auto=update
+spring.h2.console.path=/h2-console
+
+Model for User (User.java)
+
+@Entity
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String username;
+    private String password;
+    private String role; // ROLE_USER or ROLE_ADMIN
+
+    // Getters and setters
+}
+
+Repository Interface for User (UserRepository.java)
+
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByUsername(String username);
+}
+
+UserDetailsService Implementation (CustomUserDetailsService.java)
+
+@Service
+public class CustomUserDetailsService implements UserDetailsService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        
+        return new org.springframework.security.core.userdetails.User(
+                user.getUsername(), user.getPassword(),
+                Collections.singleton(new SimpleGrantedAuthority(user.getRole())));
+    }
+}
+
+JWT Utility Class (JwtUtil.java)
+
+The JWT utility class handles token generation and validation.
+
+@Component
+public class JwtUtil {
+
+    private String SECRET_KEY = "your_secret_key";
+
+    public String generateToken(UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(userDetails.getUsername())
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 10)) // 10 hours expiry
+                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
+                .compact();
+    }
+
+    public Boolean validateToken(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
+
+    public String extractUsername(String token) {
+        return extractAllClaims(token).getSubject();
+    }
+
+    private Claims extractAllClaims(String token) {
+        return Jwts.parser().setSigningKey(SECRET_KEY).parseClaimsJws(token).getBody();
+    }
+
+    private Boolean isTokenExpired(String token) {
+        return extractAllClaims(token).getExpiration().before(new Date());
+    }
+}
+
+Security Configuration (SecurityConfig.java)
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Autowired
+    private CustomUserDetailsService userDetailsService;
+
+    @Autowired
+    private JwtRequestFilter jwtRequestFilter;
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+                .authorizeRequests()
+                .antMatchers("/auth/login", "/auth/register").permitAll()
+                .anyRequest().authenticated()
+                .and()
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+
+        http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+    }
+
+    @Bean
+    @Override
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        return super.authenticationManagerBean();
+    }
+}
+
+Controller for Authentication (AuthController.java)
+
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CustomUserDetailsService userDetailsService;
+
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody AuthRequest authRequest) throws Exception {
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword())
+            );
+        } catch (BadCredentialsException e) {
+            throw new Exception("Incorrect username or password", e);
+        }
+
+        final UserDetails userDetails = userDetailsService.loadUserByUsername(authRequest.getUsername());
+        final String jwt = jwtUtil.generateToken(userDetails);
+
+        return ResponseEntity.ok(new AuthResponse(jwt));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody User user) {
+        user.setPassword(new BCryptPasswordEncoder().encode(user.getPassword()));
+        user.setRole("ROLE_USER");
+        userRepository.save(user);
+        return ResponseEntity.ok("User registered successfully");
+    }
+}
+
+AuthRequest and AuthResponse DTOs
+
+public class AuthRequest {
+    private String username;
+    private String password;
+    
+    // Getters and Setters
+}
+
+public class AuthResponse {
+    private String jwt;
+
+    public AuthResponse(String jwt) {
+        this.jwt = jwt;
+    }
+
+    public String getJwt() {
+        return jwt;
+    }
+}
+
+
+---
+
+2. Dashboard Overview Module
+
+Create a basic API to fetch and display an overview of key performance metrics.
+
+Dashboard Controller (DashboardController.java)
+
+@RestController
+@RequestMapping("/dashboard")
+public class DashboardController {
+
+    @GetMapping("/overview")
+    public ResponseEntity<DashboardOverview> getOverview() {
+        DashboardOverview overview = new DashboardOverview();
+        overview.setKpi1(100);
+        overview.setKpi2(200);
+        overview.setKpi3(300);
+        return ResponseEntity.ok(overview);
+    }
+}
+
+DashboardOverview Model (DashboardOverview.java)
+
+public class DashboardOverview {
+
+    private int kpi1;
+    private int kpi2;
+    private int kpi3;
+
+    // Getters and Setters
+}
+
+Frontend (Thymeleaf)
+
+In Thymeleaf templates, you can create a basic dashboard.html file:
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>CEO Dashboard Overview</title>
+</head>
+<body>
+    <h1>Dashboard Overview</h1>
+    <div id="dashboard"></div>
+
+    <script>
+        const jwt = localStorage.getItem('jwt');
+
+        fetch('/dashboard/overview', {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + jwt
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('dashboard').innerHTML =
+                `<p>KPI 1: ${data.kpi1}</p>
+                 <p>KPI 2: ${data.kpi2}</p>
+                 <p>KPI 3: ${data.kpi3}</p>`;
+        })
+        .catch(error => {
+            console.error('Error fetching dashboard data:', error);
+        });
+    </script>
+</body>
+</html>
+
+
+---
+
+3. H2 Database Console
+
+You can access the H2 console at:
+
+http://localhost:8080/h2-console
+
+JDBC URL: jdbc:h2:mem:testdb
+
+
+---
+
+This setup covers the essential modules of User Authentication, Dashboard Overview, and in-memory H2 Database. The remaining modules like Financial Metrics, Sales and Marketing, and Operational Metrics can be developed similarly by extending the backend to fetch the relevant data and integrating it into the frontend.
+
