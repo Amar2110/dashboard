@@ -316,3 +316,98 @@ JDBC URL: jdbc:h2:mem:testdb
 
 This setup covers the essential modules of User Authentication, Dashboard Overview, and in-memory H2 Database. The remaining modules like Financial Metrics, Sales and Marketing, and Operational Metrics can be developed similarly by extending the backend to fetch the relevant data and integrating it into the frontend.
 
+
+
+The error is occurring because WebSecurityConfigurerAdapter was deprecated in Spring Security 5.7 and later removed in newer versions of Spring. The recommended approach now is to use SecurityFilterChain and AuthenticationManager instead.
+
+Solution: Use SecurityFilterChain
+
+Here’s how to configure Spring Security without extending WebSecurityConfigurerAdapter:
+
+Example: Modern Spring Security Configuration
+
+1. Security Configuration using SecurityFilterChain
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+
+@Configuration
+public class SecurityConfig {
+
+    private final UserDetailsService userDetailsService;
+
+    public SecurityConfig(UserDetailsService userDetailsService) {
+        this.userDetailsService = userDetailsService;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeRequests(authorize -> authorize
+                .antMatchers("/login", "/register").permitAll()
+                .anyRequest().authenticated()
+            )
+            .formLogin(formLogin -> formLogin
+                .loginPage("/login")
+                .permitAll()
+            )
+            .logout(logout -> logout
+                .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
+                .permitAll()
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
+    }
+}
+
+Explanation:
+
+1. SecurityFilterChain: Configures which endpoints require authentication and which ones are public.
+
+
+2. PasswordEncoder: Provides a password encoder (BCrypt in this case) for securing passwords.
+
+
+3. AuthenticationManager: Manages authentication based on the provided UserDetailsService.
+
+
+4. authorizeRequests(): Defines the security rules for different paths. For example, /login and /register are publicly accessible, while all other requests require authentication.
+
+
+5. formLogin(): Specifies that form-based login is used, with the login page at /login.
+
+
+
+Important Changes:
+
+No more WebSecurityConfigurerAdapter: The configuration is now done via SecurityFilterChain.
+
+More flexible setup: You can define beans for SecurityFilterChain, AuthenticationManager, and other components.
+
+
+Using a Custom UserDetailsService
+
+If you're using a custom UserDetailsService, make sure it’s properly configured with authentication:
+
+2. Custom UserDetailsService Implementation
+
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org
