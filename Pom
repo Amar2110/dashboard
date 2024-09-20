@@ -1,0 +1,65 @@
+To use JWT (JSON Web Token) functionality in your Spring Boot project, you will need the correct dependencies for the JJWT (Java JWT) library in your pom.xml.
+
+Here’s how you can include the necessary dependencies for the JJWT library version 0.11.5, which is one of the most commonly used versions:
+
+pom.xml Dependencies for JWT
+
+<dependencies>
+    <!-- Spring Boot Dependencies -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- JJWT API (Core JWT library) -->
+    <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-api</artifactId>
+        <version>0.11.5</version>
+    </dependency>
+
+    <!-- JJWT Implementation (Required for signing and parsing tokens) -->
+    <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-impl</artifactId>
+        <version>0.11.5</version>
+        <scope>runtime</scope>
+    </dependency>
+
+    <!-- JJWT Jackson (Optional: For JSON serialization/deserialization) -->
+    <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-jackson</artifactId> <!-- or jjwt-gson if you prefer Gson -->
+        <version>0.11.5</version>
+        <scope>runtime</scope>
+    </dependency>
+
+    <!-- Spring Boot Starter Security (Optional: If using Spring Security with JWT) -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+
+    <!-- Lombok (Optional: For easier coding with annotations) -->
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <version>1.18.24</version>
+        <scope>provided</scope>
+    </dependency>
+
+    <!-- Other dependencies if needed -->
+</dependencies>
+
+Explanation of Dependencies:
+
+1. jjwt-api: The core JWT library that provides the necessary APIs to create, parse, and validate JWTs.
+
+
+2. jjwt-impl: This contains the actual implementation of the JWT signing, verification, and parsing logic.
+
+
+3. **jj
+
+
+
