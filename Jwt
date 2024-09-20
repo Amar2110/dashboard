@@ -1,0 +1,80 @@
+Here’s how you can modify your JwtUtil class to correctly parse a JWT using the new JwtParserBuilder API in the io.jsonwebtoken library (version 0.11.0 and above).
+
+Updated JwtUtil class with correct JWT parsing
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.SecretKey;
+import java.util.Date;
+
+@Component
+public class JwtUtil {
+
+    // Define a secret key (ensure it is long enough, e.g., 256 bits for HS256)
+    private static final String SECRET_KEY = "your-secure-secret-key-which-should-be-at-least-256-bits-long";
+
+    // Generate the secret key for signing
+    private final SecretKey secretKey = Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
+
+    // Generate token
+    public String generateToken(String username) {
+        return Jwts.builder()
+                .setSubject(username)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 10)) // 10 hours
+                .signWith(secretKey)
+                .compact();
+    }
+
+    // Validate token and extract claims
+    public Claims extractAllClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(secretKey)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+
+    // Extract username from token
+    public String extractUsername(String token) {
+        return extractAllClaims(token).getSubject();
+    }
+
+    // Check if token is expired
+    public Boolean isTokenExpired(String token) {
+        return extractAllClaims(token).getExpiration().before(new Date());
+    }
+
+    // Validate token
+    public Boolean validateToken(String token, String username) {
+        final String extractedUsername = extractUsername(token);
+        return (extractedUsername.equals(username) && !isTokenExpired(token));
+    }
+}
+
+Key Points:
+
+1. secretKey: This is created using the Keys.hmacShaKeyFor() method, which generates a secure key for signing.
+
+
+2. parseClaimsJws(): This method is used after building the JwtParser to extract the claims from the JWT token and validate the signature.
+
+
+3. Claims Extraction: extractAllClaims is a helper method to extract claims from the JWT.
+
+
+4. Token Validation: validateToken checks if the token is valid by comparing the username and checking if the token has expired.
+
+
+
+Required Dependencies
+
+Make sure you have the following dependencies in your pom.xml for jjwt:
+
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-api</artifactId>
+    <version>0.11.5</version> <!-- Latest version -->
